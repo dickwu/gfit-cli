@@ -189,6 +189,7 @@ fn update_cmd() -> Command {
         params: vec![
             opt("check", PType::Bool, "Only check whether a newer version exists; don't install"),
             opt("force", PType::Bool, "Reinstall the latest release even if already up to date"),
+            opt("insecure", PType::Bool, "Skip SHA-256 checksum verification of the download"),
         ],
         desc: "Check GitHub Releases and upgrade gfit-cli in place".into(),
         special: Special::Update,

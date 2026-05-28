@@ -91,7 +91,7 @@ fn run(command: &Command, parsed: &args::ParsedArgs) -> Result<(), String> {
     // Local-only command: self-update from GitHub Releases. Talks to GitHub, not the
     // GFIT API, so it runs without login and before the login gate below.
     if command.special == Special::Update {
-        return update::run(parsed.has("check"), parsed.has("force"));
+        return update::run(parsed.has("check"), parsed.has("force"), parsed.has("insecure"));
     }
 
     let dry = parsed.has("dry-run");
