@@ -1,0 +1,20 @@
+[package]
+name = "gfit-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Command-line client for the GFIT wellness API (mirrors the workout app's API surface)"
+license = "MIT"
+
+[[bin]]
+name = "gfit-cli"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true

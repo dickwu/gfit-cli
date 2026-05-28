@@ -1,0 +1,15 @@
+# Rust build output
+/target
+
+# Local agent / tooling state — never publish
+/.omc/
+/.claude-flow/
+/.omx/
+/.shared/
+
+# Self-update leftovers
+.gfit-cli-update-*
+*.old
+
+# macOS
+.DS_Store
