@@ -3,6 +3,10 @@ name: release
 # Build cross-platform binaries and attach them to the GitHub Release whenever a
 # version tag is pushed. The self-updater (`gfit-cli self.update`) downloads the
 # asset named `gfit-cli-<target>` that matches the running platform.
+#
+# Two stages so matrix jobs never race to write the same release: each `build`
+# job uploads its binary as a CI artifact, then a single `release` job collects
+# them all and publishes the release once.
 
 on:
   push:
@@ -19,7 +23,7 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.target }}
+    name: build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -58,15 +62,34 @@ jobs:
       - name: Stage binary
         shell: bash
         run: |
-          src="target/${{ matrix.target }}/release/gfit-cli"
-          dst="gfit-cli-${{ matrix.target }}"
-          cp "$src" "$dst"
-          ls -l "$dst"
+          cp "target/${{ matrix.target }}/release/gfit-cli" "gfit-cli-${{ matrix.target }}"
+          ls -l "gfit-cli-${{ matrix.target }}"
 
-      - name: Upload to release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gfit-cli-${{ matrix.target }}
+          path: gfit-cli-${{ matrix.target }}
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -lR dist
+
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          files: gfit-cli-${{ matrix.target }}
+          files: dist/*
           fail_on_unmatched_files: true
           generate_release_notes: true
