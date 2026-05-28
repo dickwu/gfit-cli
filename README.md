@@ -138,13 +138,17 @@ gfit-cli admin.food.create --name Apple --calories 95 --carbs 25 \
 `gfit-cli` can upgrade itself from GitHub Releases — no package manager needed:
 
 ```bash
-gfit-cli self.update --check   # report current vs latest; install nothing
-gfit-cli self.update           # download + replace this binary if a newer one exists
-gfit-cli self.update --force   # reinstall the latest even if already current
+gfit-cli self.update --check     # report current vs latest; install nothing
+gfit-cli self.update             # download + replace this binary if a newer one exists
+gfit-cli self.update --force     # reinstall the latest even if already current
+gfit-cli self.update --insecure  # skip SHA-256 checksum verification (not recommended)
 ```
 
-It fetches the release asset matching the running platform, swaps the binary in
-place atomically, and rolls back on failure. If `gfit-cli` lives in a protected
+It fetches the release asset matching the running platform, **verifies it against
+the published `<asset>.sha256` checksum**, then swaps the binary in place
+atomically (rolling back on failure). Downloads only follow redirects to
+`https://*.github.com` hosts, and a mismatched or missing checksum aborts the
+install (override with `--insecure`). If `gfit-cli` lives in a protected
 directory (e.g. `/usr/local/bin`), run the update with `sudo`. This is a local
 command — it talks to GitHub, not the GFIT API, so it needs no login.
 
