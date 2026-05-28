@@ -9,7 +9,26 @@ Every command is self-documenting: run it with `-h` to print its full API
 documentation (endpoint, auth requirement, and every parameter with type and
 meaning).
 
-## Build
+## Install
+
+Download the binary for your platform from the
+[latest release](https://github.com/dickwu/gfit-cli/releases/latest) — assets are
+named `gfit-cli-<target>` (e.g. `gfit-cli-aarch64-apple-darwin`):
+
+```bash
+# macOS (Apple Silicon) example
+curl -fsSL -o gfit-cli https://github.com/dickwu/gfit-cli/releases/latest/download/gfit-cli-aarch64-apple-darwin
+chmod +x gfit-cli
+sudo mv gfit-cli /usr/local/bin/
+gfit-cli --version
+```
+
+Available targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`,
+`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`.
+
+Once installed, keep it current with `gfit-cli self.update` (see [Updating](#updating)).
+
+## Build from source
 
 ```bash
 cargo build --release
@@ -114,6 +133,21 @@ gfit-cli admin.food.create --name Apple --calories 95 --carbs 25 \
   --protein 0 --fat 0 --fibre 4 --weight 182 --measure 'medium' --category Fruit
 ```
 
+## Updating
+
+`gfit-cli` can upgrade itself from GitHub Releases — no package manager needed:
+
+```bash
+gfit-cli self.update --check   # report current vs latest; install nothing
+gfit-cli self.update           # download + replace this binary if a newer one exists
+gfit-cli self.update --force   # reinstall the latest even if already current
+```
+
+It fetches the release asset matching the running platform, swaps the binary in
+place atomically, and rolls back on failure. If `gfit-cli` lives in a protected
+directory (e.g. `/usr/local/bin`), run the update with `sudo`. This is a local
+command — it talks to GitHub, not the GFIT API, so it needs no login.
+
 ## Configuration
 
 State is stored at **`~/.config/gfit.json`**:
@@ -143,14 +177,18 @@ Environment overrides:
 ## Project layout
 
 ```
+build.rs        bakes the build target triple in (GFIT_TARGET) for self-update asset matching
 src/
   main.rs       entry point: dispatch, body building, help rendering, login persistence
   registry.rs   single source of truth — every endpoint as a dot-named command + params
-  client.rs     HTTP layer (reqwest blocking; JSON + multipart POST)
+  client.rs     HTTP layer (reqwest blocking; JSON + multipart POST; GitHub get/download)
   config.rs     ~/.config/gfit.json load/save
   args.rs       --key value / --key=value / bare-flag parser
+  update.rs     self-update: check GitHub Releases + replace the binary in place
 tests/
   cli.rs        end-to-end tests driving the built binary (dry-run, never networks)
+.github/workflows/
+  release.yml   on tag push, build macOS/Linux binaries and attach them to the release
 ```
 
 The registry is the only thing you edit to add or adjust endpoints; `main.rs`
