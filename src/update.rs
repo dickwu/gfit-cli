@@ -95,9 +95,16 @@ fn verify_checksum(bytes: &[u8], latest: &Latest) -> Result<(), String> {
     let expected_raw = crate::client::download_bytes(sum_url)?;
     let expected = String::from_utf8_lossy(&expected_raw);
     // checksum file is "<hex>" or "<hex>  <filename>"; take the first token.
-    let expected = expected.split_whitespace().next().unwrap_or("").to_lowercase();
+    let expected = expected
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
     if expected.len() != 64 {
-        return Err(format!("malformed checksum asset for {}", latest.asset_name));
+        return Err(format!(
+            "malformed checksum asset for {}",
+            latest.asset_name
+        ));
     }
     let actual = sha256_hex(bytes);
     if actual != expected {
@@ -171,8 +178,11 @@ pub fn run(check_only: bool, force: bool, insecure: bool) -> Result<(), String> 
 /// rename where the OS allows replacing a running binary (Linux/macOS); falls
 /// back to moving the current binary aside (Windows / busy file).
 fn install(bytes: &[u8]) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| format!("cannot locate current executable: {e}"))?;
-    let dir = exe.parent().ok_or("current executable has no parent directory")?;
+    let exe =
+        std::env::current_exe().map_err(|e| format!("cannot locate current executable: {e}"))?;
+    let dir = exe
+        .parent()
+        .ok_or("current executable has no parent directory")?;
     let tmp: PathBuf = dir.join(format!(".gfit-cli-update-{}", std::process::id()));
 
     fs::write(&tmp, bytes).map_err(|e| {
@@ -208,7 +218,9 @@ fn install(bytes: &[u8]) -> Result<(), String> {
         // Putting the new binary in place failed; restore the original.
         if fs::rename(&old, &exe).is_ok() {
             let _ = fs::remove_file(&tmp);
-            return Err(format!("cannot install update: {e} (your existing binary is intact)."));
+            return Err(format!(
+                "cannot install update: {e} (your existing binary is intact)."
+            ));
         }
         // Rollback also failed — tell the user exactly how to recover by hand.
         return Err(format!(

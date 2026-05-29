@@ -19,7 +19,6 @@ impl ParsedArgs {
     pub fn has(&self, key: &str) -> bool {
         self.items.iter().any(|(k, _)| k == key)
     }
-
 }
 
 pub fn parse(raw: &[String]) -> ParsedArgs {

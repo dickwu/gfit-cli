@@ -32,7 +32,11 @@ fn is_trusted_download_host(host: &str) -> bool {
 fn build_download_client() -> Result<reqwest::blocking::Client, String> {
     let policy = reqwest::redirect::Policy::custom(|attempt| {
         let trusted = attempt.url().scheme() == "https"
-            && attempt.url().host_str().map(is_trusted_download_host).unwrap_or(false);
+            && attempt
+                .url()
+                .host_str()
+                .map(is_trusted_download_host)
+                .unwrap_or(false);
         if !trusted {
             attempt.stop() // returns the 3xx as-is; caller rejects the non-2xx status
         } else if attempt.previous().len() >= 10 {
@@ -52,7 +56,9 @@ fn build_download_client() -> Result<reqwest::blocking::Client, String> {
 
 fn finish(resp: reqwest::blocking::Response) -> Result<Response, String> {
     let status = resp.status().as_u16();
-    let text = resp.text().map_err(|e| format!("failed to read response: {e}"))?;
+    let text = resp
+        .text()
+        .map_err(|e| format!("failed to read response: {e}"))?;
     let body = serde_json::from_str::<Value>(&text).unwrap_or(Value::String(text));
     Ok(Response { status, body })
 }
@@ -96,7 +102,9 @@ pub fn get_json(url: &str) -> Result<Value, String> {
         .send()
         .map_err(|e| format!("request failed: {e}"))?;
     let status = resp.status();
-    let text = resp.text().map_err(|e| format!("failed to read response: {e}"))?;
+    let text = resp
+        .text()
+        .map_err(|e| format!("failed to read response: {e}"))?;
     if !status.is_success() {
         let detail = text.lines().next().unwrap_or("").to_string();
         return Err(format!("GitHub API HTTP {}: {detail}", status.as_u16()));
@@ -119,6 +127,8 @@ pub fn download_bytes(url: &str) -> Result<Vec<u8>, String> {
             resp.status().as_u16()
         ));
     }
-    let bytes = resp.bytes().map_err(|e| format!("failed to read download: {e}"))?;
+    let bytes = resp
+        .bytes()
+        .map_err(|e| format!("failed to read download: {e}"))?;
     Ok(bytes.to_vec())
 }

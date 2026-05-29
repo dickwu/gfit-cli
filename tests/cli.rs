@@ -73,7 +73,9 @@ fn login_dry_run_builds_body() {
         "--dry-run",
     ]);
     assert_eq!(o.code, 0);
-    assert!(o.stdout.contains("POST https://api.gfitwellness.ca/auth/login"));
+    assert!(o
+        .stdout
+        .contains("POST https://api.gfitwellness.ca/auth/login"));
     assert!(o.stdout.contains("\"email\": \"me@example.com\""));
     assert!(o.stdout.contains("\"password\": \"p@ss word\""));
     assert!(o.stdout.contains("auth: (none)"));
@@ -161,7 +163,14 @@ fn networked_command_blocked_when_not_logged_in() {
 fn login_runs_without_token() {
     // auth.login is the one networked command allowed without a token (dry-run proves
     // it builds + would send without the login gate firing).
-    let o = run(&["auth.login", "--email", "a@b.c", "--password", "x", "--dry-run"]);
+    let o = run(&[
+        "auth.login",
+        "--email",
+        "a@b.c",
+        "--password",
+        "x",
+        "--dry-run",
+    ]);
     assert_eq!(o.code, 0);
     assert!(o.stdout.contains("auth/login"));
 }

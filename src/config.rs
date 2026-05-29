@@ -36,8 +36,7 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let json = serde_json::to_string_pretty(cfg)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let json = serde_json::to_string_pretty(cfg).map_err(std::io::Error::other)?;
     std::fs::write(&path, json + "\n")
 }
 

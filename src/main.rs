@@ -58,7 +58,9 @@ fn main() {
             if let Some(sug) = suggest(&reg, name) {
                 eprintln!("did you mean '{sug}'?");
             }
-            eprintln!("\nrun `gfit-cli` to list all commands, or `gfit-cli <command> -h` for details.");
+            eprintln!(
+                "\nrun `gfit-cli` to list all commands, or `gfit-cli <command> -h` for details."
+            );
             exit(2);
         }
     };
@@ -86,14 +88,25 @@ fn run(command: &Command, parsed: &args::ParsedArgs) -> Result<(), String> {
             Some(e) => println!("email:   {e}"),
             None => println!("email:   (not logged in)"),
         }
-        println!("token:   {}", if cfg.token.is_some() { "present" } else { "absent" });
+        println!(
+            "token:   {}",
+            if cfg.token.is_some() {
+                "present"
+            } else {
+                "absent"
+            }
+        );
         return Ok(());
     }
 
     // Local-only command: self-update from GitHub Releases. Talks to GitHub, not the
     // GFIT API, so it runs without login and before the login gate below.
     if command.special == Special::Update {
-        return update::run(parsed.has("check"), parsed.has("force"), parsed.has("insecure"));
+        return update::run(
+            parsed.has("check"),
+            parsed.has("force"),
+            parsed.has("insecure"),
+        );
     }
 
     let dry = parsed.has("dry-run");
@@ -125,14 +138,22 @@ fn run(command: &Command, parsed: &args::ParsedArgs) -> Result<(), String> {
     let body = build_body(command, parsed)?;
 
     // Attach the token only to endpoints that take auth.
-    let token: Option<String> = if command.auth { cfg.token.clone() } else { None };
+    let token: Option<String> = if command.auth {
+        cfg.token.clone()
+    } else {
+        None
+    };
 
     let base = config::api_url(&cfg);
     let url = format!("{}/{}", base.trim_end_matches('/'), command.path);
 
     // --dry-run: show what would be sent without sending it.
     if dry {
-        let method = if command.method == Method::Multipart { "POST (multipart)" } else { "POST" };
+        let method = if command.method == Method::Multipart {
+            "POST (multipart)"
+        } else {
+            "POST"
+        };
         println!("{method} {url}");
         let auth_line = if !command.auth {
             "(none)"
@@ -146,7 +167,10 @@ fn run(command: &Command, parsed: &args::ParsedArgs) -> Result<(), String> {
             println!("file: {:?}", body.get("file"));
             println!("type: {:?}", body.get("type"));
         } else {
-            println!("body: {}", serde_json::to_string_pretty(&body).unwrap_or_default());
+            println!(
+                "body: {}",
+                serde_json::to_string_pretty(&body).unwrap_or_default()
+            );
         }
         return Ok(());
     }
@@ -166,7 +190,10 @@ fn run(command: &Command, parsed: &args::ParsedArgs) -> Result<(), String> {
     // Special: persist token on login (direct email+password flow).
     if command.special == Special::Login {
         login::persist(resp, body.get("email").and_then(Value::as_str))?;
-        println!("Login successful. Token saved to {}", config::config_path().display());
+        println!(
+            "Login successful. Token saved to {}",
+            config::config_path().display()
+        );
         return Ok(());
     }
     // Special: clear token on logout regardless of server response shape.
@@ -202,10 +229,7 @@ fn build_body(command: &Command, parsed: &args::ParsedArgs) -> Result<Map<String
         };
         match raw {
             Some(v) => {
-                let val = p
-                    .ty
-                    .coerce(&v)
-                    .map_err(|e| format!("--{}: {e}", p.name))?;
+                let val = p.ty.coerce(&v).map_err(|e| format!("--{}: {e}", p.name))?;
                 body.insert(p.name.clone(), val);
             }
             None => {
@@ -234,7 +258,8 @@ fn build_body(command: &Command, parsed: &args::ParsedArgs) -> Result<Map<String
 
     // --json merges a full object on top.
     if let Some(j) = parsed.get("json") {
-        let extra: Value = serde_json::from_str(j).map_err(|e| format!("--json: invalid JSON: {e}"))?;
+        let extra: Value =
+            serde_json::from_str(j).map_err(|e| format!("--json: invalid JSON: {e}"))?;
         if let Value::Object(m) = extra {
             for (k, v) in m {
                 body.insert(k, v);
@@ -291,16 +316,28 @@ fn print_command_help(command: &Command) {
     if is_local {
         println!("  (local command — does not call the GFIT API or require login)");
     } else {
-        let method = if command.method == Method::Multipart { "POST (multipart/form-data)" } else { "POST" };
+        let method = if command.method == Method::Multipart {
+            "POST (multipart/form-data)"
+        } else {
+            "POST"
+        };
         println!("  Endpoint: {method} {}", command.path);
-        println!("  Auth:     {}", if command.auth { "required" } else { "none" });
+        println!(
+            "  Auth:     {}",
+            if command.auth { "required" } else { "none" }
+        );
     }
 
     if command.params.is_empty() {
         println!("\n  Parameters: (none)");
     } else {
         println!("\n  Parameters:");
-        let width = command.params.iter().map(|p| p.name.len()).max().unwrap_or(0);
+        let width = command
+            .params
+            .iter()
+            .map(|p| p.name.len())
+            .max()
+            .unwrap_or(0);
         for p in &command.params {
             let tag = if p.required {
                 "required".to_string()
@@ -360,7 +397,10 @@ fn print_global_help(reg: &[Command]) {
     println!("    gfit-cli auth.status");
     println!("    gfit-cli coach.clients --search 'john'\n");
     println!("CONFIG:");
-    println!("    Token + email saved to {}", config::config_path().display());
+    println!(
+        "    Token + email saved to {}",
+        config::config_path().display()
+    );
     println!("    Override base URL with GFIT_API_URL, config path with GFIT_CONFIG.\n");
 
     println!("COMMANDS ({} total):", reg.len());
@@ -377,7 +417,13 @@ fn print_global_help(reg: &[Command]) {
         } else {
             format!("  (alias: {})", c.aliases.join(", "))
         };
-        println!("  {:<width$}  {}{}", c.name, c.desc, alias, width = name_width);
+        println!(
+            "  {:<width$}  {}{}",
+            c.name,
+            c.desc,
+            alias,
+            width = name_width
+        );
     }
 }
 
@@ -389,6 +435,8 @@ fn suggest<'a>(reg: &'a [Command], name: &str) -> Option<&'a str> {
         .find(|n| n.contains(&lower) || lower.contains(*n))
         .or_else(|| {
             let prefix = lower.split('.').next().unwrap_or(&lower);
-            reg.iter().map(|c| c.name.as_str()).find(|n| n.starts_with(prefix))
+            reg.iter()
+                .map(|c| c.name.as_str())
+                .find(|n| n.starts_with(prefix))
         })
 }
