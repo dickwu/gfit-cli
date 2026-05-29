@@ -190,6 +190,10 @@ into Claude:
 npx skills add dickwu/gfit-cli --skill gfit-cli
 ```
 
+The skill drives the `gfit-cli` binary, so [install it](#install) and run
+`gfit-cli auth.login` ([Signing in](#signing-in)) first. Full step-by-step setup and usage
+live in [`skills/README.md`](skills/).
+
 | Skill | What it does |
 |-------|--------------|
 | [`gfit-cli`](skills/gfit-cli/SKILL.md) | Makes Claude fluent and safe with gfit-cli for any GFIT API operation — the command model, discovery (`gfit-cli` + `<cmd> -h`), auth, global flags, passthrough params, the `code == 1` / `data` envelope, exit codes, and a confirm-before-write workflow. Includes worked recipes (incl. a weekly client check-in review). |

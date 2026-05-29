@@ -10,13 +10,44 @@ other supported agents).
 |-------|--------------|
 | [`gfit-cli`](./gfit-cli/SKILL.md) | Makes Claude fluent and **safe** with `gfit-cli` for *any* GFIT API operation: the `group.action` command model, the discovery loop (`gfit-cli` + `<cmd> -h`), authentication, the global flags (`--dry-run` / `--raw` / `--json`), arbitrary passthrough parameters, the `code == 1` / `data` response envelope, exit codes, and a confirm-before-write workflow. Ships worked recipes — including a **weekly client check-in review** that finds who hasn't checked in and drafts follow-up emails. |
 
-## Install
+## Setup (one time)
+
+The skill *drives the `gfit-cli` binary*, so set the tool up and log in first, then install
+the skill.
+
+### 1. Install the `gfit-cli` binary
+
+```bash
+# macOS (Apple Silicon) example:
+curl -fsSL -o gfit-cli https://github.com/dickwu/gfit-cli/releases/latest/download/gfit-cli-aarch64-apple-darwin
+chmod +x gfit-cli && sudo mv gfit-cli /usr/local/bin/
+gfit-cli --version
+```
+
+Other targets (`x86_64-apple-darwin`, `{x86_64,aarch64}-unknown-linux-gnu`) and a
+build-from-source option are in the [main README](../README.md#install).
+
+### 2. Log in
+
+```bash
+gfit-cli auth.login      # opens a browser sign-in; saves the token to ~/.config/gfit.json
+gfit-cli auth.status     # confirm — should show your email and "token: present"
+```
+
+You act as **whoever logs in here** — e.g. `coach.clients` returns *that* coach's clients —
+so sign in as the coach who'll use the skill. Headless / scriptable alternative:
+
+```bash
+gfit-cli auth.login --email you@example.com --password 'secret'
+```
+
+### 3. Install the skill
 
 ```bash
 # Interactive — pick which Claude app(s) to install into when prompted:
 npx skills add dickwu/gfit-cli --skill gfit-cli
 
-# Or target Claude Code directly, and -g for a global (all-projects) install:
+# Or target Claude Code directly; add -g for a global (all-projects) install:
 npx skills add dickwu/gfit-cli --skill gfit-cli -a claude-code
 npx skills add dickwu/gfit-cli --skill gfit-cli -a claude-code -g
 ```
@@ -24,13 +55,11 @@ npx skills add dickwu/gfit-cli --skill gfit-cli -a claude-code -g
 If your Claude app reads skills from a folder and isn't offered by `npx skills`, just copy
 the `gfit-cli/` folder into that app's skills directory.
 
-## What your Claude needs
+### 4. Connect Gmail (only for email-drafting recipes)
 
-1. **`gfit-cli` installed and runnable** from the shell, and logged in
-   (`gfit-cli auth.login`). The skill's own *Authentication* section covers this; the
-   binary install is in the repo [README](../README.md#install).
-2. **Only for recipes that draft email** (e.g. the check-in review): **Gmail connected**,
-   with the ability to create drafts.
+The weekly check-in recipe drafts follow-up emails, so connect **Gmail** in your Claude app
+with permission to create drafts. Pure data tasks — listing clients, reading logs — don't
+need this.
 
 ## How to use
 
