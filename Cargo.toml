@@ -1,6 +1,6 @@
 [package]
 name = "gfit-cli"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Command-line client for the GFIT wellness API (mirrors the workout app's API surface)"
 license = "MIT"
