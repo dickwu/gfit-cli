@@ -198,6 +198,14 @@ live in [`skills/README.md`](skills/).
 |-------|--------------|
 | [`gfit-cli`](skills/gfit-cli/SKILL.md) | Makes Claude fluent and safe with gfit-cli for any GFIT API operation — the command model, discovery (`gfit-cli` + `<cmd> -h`), auth, global flags, passthrough params, the `code == 1` / `data` envelope, exit codes, and a confirm-before-write workflow. Includes worked recipes (incl. a weekly client check-in review). |
 
+### Use it in Claude Desktop (`.mcpb`)
+
+For **Claude Desktop**, install the bundled MCP extension instead of the skill — it exposes
+gfit-cli as tools Claude can call directly (Desktop can't run a CLI on its own). Build it
+from [`mcpb/`](mcpb/) (`npm install --omit=dev` then `npx @anthropic-ai/mcpb pack .`) and
+drag the resulting `gfit-cli.mcpb` into **Settings → Extensions**. It still needs gfit-cli
+installed and `gfit-cli auth.login`. Details: [`mcpb/README.md`](mcpb/).
+
 ## Configuration
 
 State is stored at **`~/.config/gfit.json`**:

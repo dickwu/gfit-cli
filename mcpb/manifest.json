@@ -1,0 +1,73 @@
+{
+  "manifest_version": "0.3",
+  "name": "gfit-cli",
+  "display_name": "GFIT CLI",
+  "version": "0.1.0",
+  "description": "Use the GFIT wellness API from Claude — clients, check-ins, plans, metrics, invoices, and more — by wrapping the gfit-cli tool.",
+  "long_description": "Exposes the `gfit-cli` command-line client as MCP tools so Claude Desktop can drive the GFIT wellness API. Discover commands (`gfit_list_commands`), read their docs (`gfit_help`), check login (`gfit_auth_status`), and call any of the ~144 endpoints (`gfit_run`). Reads run directly; write/destructive commands return a `--dry-run` preview unless you pass `confirm: true`, and `*.notice` (sends client email) / `*.delete` are guarded. Requires the gfit-cli binary installed and logged in (`gfit-cli auth.login`).",
+  "author": {
+    "name": "Peilin Wu",
+    "url": "https://github.com/dickwu/gfit-cli"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dickwu/gfit-cli"
+  },
+  "homepage": "https://github.com/dickwu/gfit-cli",
+  "documentation": "https://github.com/dickwu/gfit-cli/blob/main/README.md",
+  "license": "MIT",
+  "keywords": ["gfit", "wellness", "fitness", "coaching", "cli", "api"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "GFIT_CLI_PATH": "${user_config.gfit_cli_path}",
+        "GFIT_API_URL": "${user_config.api_url}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "gfit_list_commands",
+      "description": "List every gfit-cli command, grouped — the full surface."
+    },
+    {
+      "name": "gfit_help",
+      "description": "Show one command's API docs: endpoint, auth, and each parameter."
+    },
+    {
+      "name": "gfit_auth_status",
+      "description": "Show whether gfit-cli is logged in."
+    },
+    {
+      "name": "gfit_run",
+      "description": "Run any gfit-cli command. Reads run directly; writes return a dry-run preview unless confirm:true."
+    }
+  ],
+  "tools_generated": false,
+  "user_config": {
+    "gfit_cli_path": {
+      "type": "string",
+      "title": "gfit-cli path",
+      "description": "Path to the gfit-cli binary. Leave as 'gfit-cli' if it's on your PATH; otherwise an absolute path (e.g. /usr/local/bin/gfit-cli).",
+      "default": "gfit-cli",
+      "required": false
+    },
+    "api_url": {
+      "type": "string",
+      "title": "GFIT API base URL",
+      "description": "Override only for a staging environment; leave as default for production.",
+      "default": "https://api.gfitwellness.ca",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}
