@@ -40,7 +40,9 @@ install -m755 target/release/gfit-cli /usr/local/bin/gfit-cli
 ## Quick start
 
 ```bash
-# 1. Log in — the token is saved to ~/.config/gfit.json
+# 1. Log in — opens a browser sign-in page; the token is saved to ~/.config/gfit.json
+gfit-cli auth.login
+#    …or log in directly without a browser (handy for scripts / headless boxes):
 gfit-cli auth.login --email you@example.com --password 'secret'
 
 # 2. Check who you are / where state lives
@@ -52,11 +54,36 @@ gfit-cli admin.members --type all --page 1
 gfit-cli coach.weight.log-list --uid 42 --start_date 2026-01-01
 ```
 
+## Signing in
+
+`gfit-cli auth.login` (with no `--email`/`--password`) opens a **browser sign-in
+page** so your password never lands in shell history or the process list:
+
+1. The CLI starts a tiny server bound to **`127.0.0.1` only**, on a random port,
+   and opens your browser to it (it also prints the URL in case the browser
+   doesn't open — e.g. open it yourself, or use the direct flow below on a
+   headless machine).
+2. You enter your GFIT email + password in the page and submit.
+3. The page posts the credentials back to the CLI, which exchanges them with the
+   GFIT API, saves the returned token to `~/.config/gfit.json`, and exits.
+
+No external service or redirect is involved — everything stays on your machine.
+The page must echo a one-time token the CLI generated, and the server shuts down
+the moment login succeeds (or after 5 minutes).
+
+Prefer to skip the browser (scripts, CI, SSH sessions)? Pass both credentials and
+the CLI logs in directly, exactly as before:
+
+```bash
+gfit-cli auth.login --email you@example.com --password 'secret'
+```
+
 ## Authentication is required
 
-Every command talks to the API **only after you log in**. With no saved token,
-the *only* things that run are `auth.login`, the local `auth.status` / `whoami`,
-and `-h` / `--version`. Any other command exits immediately:
+Every command talks to the API **only after you log in** (see
+[Signing in](#signing-in)). With no saved token, the *only* things that run are
+`auth.login`, the local `auth.status` / `whoami`, and `-h` / `--version`. Any
+other command exits immediately:
 
 ```
 $ gfit-cli coach.clients
@@ -95,14 +122,14 @@ their canonical command.
 
 ```
 $ gfit-cli auth.login -h
-gfit-cli auth.login — Log in with email + password; saves the returned token to ~/.config/gfit.json
+gfit-cli auth.login — Log in and save the token to ~/.config/gfit.json. With no --email/--password, opens a browser sign-in page; pass both to log in directly (scriptable)
 
   Endpoint: POST auth/login
   Auth:     none
 
   Parameters:
-    --email     string  [required]  Account email
-    --password  string  [required]  Account password
+    --email     string  [optional]  Account email (omit to sign in via the browser)
+    --password  string  [optional]  Account password (omit to sign in via the browser)
 
   Common flags:
     --json '{...}'   Merge a raw JSON object into the request body
@@ -183,11 +210,13 @@ Environment overrides:
 ```
 build.rs        bakes the build target triple in (GFIT_TARGET) for self-update asset matching
 src/
-  main.rs       entry point: dispatch, body building, help rendering, login persistence
+  main.rs       entry point: dispatch, body building, help rendering, login routing
   registry.rs   single source of truth — every endpoint as a dot-named command + params
   client.rs     HTTP layer (reqwest blocking; JSON + multipart POST; GitHub get/download)
   config.rs     ~/.config/gfit.json load/save
   args.rs       --key value / --key=value / bare-flag parser
+  login.rs      shared login helpers: exchange credentials for a token + persist it
+  weblogin.rs   browser sign-in: localhost-only server that serves the login page
   update.rs     self-update: check GitHub Releases + replace the binary in place
 tests/
   cli.rs        end-to-end tests driving the built binary (dry-run, never networks)

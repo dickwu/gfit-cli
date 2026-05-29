@@ -205,10 +205,10 @@ pub fn registry() -> Vec<Command> {
             "auth.login",
             "auth/login",
             false,
-            "Log in with email + password; saves the returned token to ~/.config/gfit.json",
+            "Log in and save the token to ~/.config/gfit.json. With no --email/--password, opens a browser sign-in page; pass both to log in directly (scriptable)",
             vec![
-                req("email", PType::Str, "Account email"),
-                req("password", PType::Str, "Account password"),
+                opt("email", PType::Str, "Account email (omit to sign in via the browser)"),
+                opt("password", PType::Str, "Account password (omit to sign in via the browser)"),
             ],
         )
         .login(),

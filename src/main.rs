@@ -13,8 +13,10 @@
 mod args;
 mod client;
 mod config;
+mod login;
 mod registry;
 mod update;
+mod weblogin;
 
 use registry::{Command, Method, PType, Special};
 use serde_json::{Map, Value};
@@ -96,6 +98,18 @@ fn run(command: &Command, parsed: &args::ParsedArgs) -> Result<(), String> {
 
     let dry = parsed.has("dry-run");
 
+    // Browser login: `auth.login` with no (or partial) --email/--password opens a
+    // local web page to collect credentials, so the password never lands in shell
+    // history or process args. Passing BOTH flags keeps the direct, scriptable
+    // flow below. --dry-run always uses the direct flow so the request can be
+    // inspected offline (it never opens a browser or binds a port).
+    if command.special == Special::Login && !dry {
+        let has_creds = parsed.get("email").is_some() && parsed.get("password").is_some();
+        if !has_creds {
+            return weblogin::run(&config::api_url(&cfg), parsed.get("email"));
+        }
+    }
+
     // Login gate FIRST: every networked command requires a saved token EXCEPT
     // `auth.login` (local commands like `auth.status` returned earlier). Checked
     // before building/validating the body so a logged-out user always sees a clear
@@ -149,9 +163,11 @@ fn run(command: &Command, parsed: &args::ParsedArgs) -> Result<(), String> {
         }
     };
 
-    // Special: persist token on login.
+    // Special: persist token on login (direct email+password flow).
     if command.special == Special::Login {
-        return finish_login(resp, parsed, body);
+        login::persist(resp, body.get("email").and_then(Value::as_str))?;
+        println!("Login successful. Token saved to {}", config::config_path().display());
+        return Ok(());
     }
     // Special: clear token on logout regardless of server response shape.
     if command.special == Special::Logout {
@@ -229,35 +245,6 @@ fn build_body(command: &Command, parsed: &args::ParsedArgs) -> Result<Map<String
     }
 
     Ok(body)
-}
-
-fn finish_login(
-    resp: client::Response,
-    _parsed: &args::ParsedArgs,
-    body: Map<String, Value>,
-) -> Result<(), String> {
-    let code = resp.body.get("code").and_then(Value::as_i64);
-    if code == Some(1) {
-        let token = resp
-            .body
-            .get("data")
-            .and_then(|d| d.get("token"))
-            .and_then(Value::as_str)
-            .ok_or("login succeeded but no token in response")?;
-        let mut cfg = config::load();
-        cfg.token = Some(token.to_string());
-        cfg.email = body.get("email").and_then(Value::as_str).map(String::from);
-        config::save(&cfg).map_err(|e| format!("failed to save token: {e}"))?;
-        println!("Login successful. Token saved to {}", config::config_path().display());
-        Ok(())
-    } else {
-        let msg = resp
-            .body
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or("login failed");
-        Err(format!("{msg} (code {:?}, HTTP {})", code, resp.status))
-    }
 }
 
 /// Keep only entries in `data` (when it's an array) that contain `needle`.

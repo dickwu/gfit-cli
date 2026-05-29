@@ -165,3 +165,17 @@ fn login_runs_without_token() {
     assert_eq!(o.code, 0);
     assert!(o.stdout.contains("auth/login"));
 }
+
+#[test]
+fn login_help_describes_browser_flow() {
+    // With no --email/--password, auth.login opens a browser sign-in page; the help
+    // text advertises that and lists both credentials as optional. Only -h is asserted
+    // here — the no-args path binds a local server and waits, so it is verified
+    // out-of-band, never in `cargo test`.
+    let o = run(&["auth.login", "-h"]);
+    assert_eq!(o.code, 0);
+    assert!(o.stdout.to_lowercase().contains("browser"));
+    assert!(o.stdout.contains("--email"));
+    assert!(o.stdout.contains("--password"));
+    assert!(o.stdout.contains("[optional]"));
+}
