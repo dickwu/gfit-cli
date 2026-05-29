@@ -6,15 +6,15 @@
 //!
 //! The flow is fully self-contained: no external service, redirect, or backend
 //! change is involved. The server binds only `127.0.0.1`, uses an unguessable
-//! random port plus a per-run nonce that the page must echo, serves over HTTP
-//! (localhost only), and shuts down the moment login succeeds or 5 minutes pass.
+//! random port plus a per-run CSPRNG nonce that the page must echo, checks the
+//! request `Origin`, serves over HTTP (localhost only), and shuts down the moment
+//! login succeeds or 5 minutes pass.
 
 use crate::login;
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 /// How long to wait for the user to finish the browser login before giving up.
 const DEADLINE: Duration = Duration::from_secs(300);
@@ -32,7 +32,7 @@ pub fn run(base_url: &str, prefill_email: Option<&str>) -> Result<(), String> {
         .map_err(|e| format!("could not read the local login server address: {e}"))?
         .port();
 
-    let nonce = nonce(port);
+    let nonce = nonce()?;
     let url = format!("http://127.0.0.1:{port}/");
     let page = login_page(&nonce, prefill_email.unwrap_or(""));
 
@@ -53,7 +53,7 @@ pub fn run(base_url: &str, prefill_email: Option<&str>) -> Result<(), String> {
         }
         match listener.accept() {
             Ok((stream, _)) => {
-                if let Outcome::Success = handle(stream, &nonce, &page, base_url) {
+                if let Outcome::Success = handle(stream, port, &nonce, &page, base_url) {
                     println!(
                         "Login successful. Token saved to {}",
                         crate::config::config_path().display()
@@ -77,7 +77,7 @@ enum Outcome {
     Success,
 }
 
-fn handle(mut stream: TcpStream, nonce: &str, page: &str, base_url: &str) -> Outcome {
+fn handle(mut stream: TcpStream, port: u16, nonce: &str, page: &str, base_url: &str) -> Outcome {
     let _ = stream.set_nonblocking(false);
     let _ = stream.set_read_timeout(Some(Duration::from_secs(20)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(20)));
@@ -88,6 +88,15 @@ fn handle(mut stream: TcpStream, nonce: &str, page: &str, base_url: &str) -> Out
     };
 
     if req.method == "POST" && req.path == "/submit" {
+        // Defense in depth: a cross-origin page carries a foreign Origin header.
+        if !origin_allowed(req.origin.as_deref(), port) {
+            write_json(
+                &mut stream,
+                403,
+                &json!({"ok": false, "message": "bad origin"}),
+            );
+            return Outcome::Pending;
+        }
         let v: serde_json::Value =
             serde_json::from_str(&req.body).unwrap_or(serde_json::Value::Null);
         // The page must echo our per-run nonce; a blind cross-site POST cannot read it.
@@ -135,6 +144,7 @@ struct Req {
     method: String,
     path: String,
     body: String,
+    origin: Option<String>,
 }
 
 /// Parse a single HTTP/1.1 request: the request line, just enough headers to find
@@ -164,10 +174,13 @@ fn read_request<R: Read>(r: &mut R) -> Option<Req> {
     let path = request_line.next()?.to_string();
 
     let mut content_length = 0usize;
+    let mut origin = None;
     for line in lines {
         if let Some((k, val)) = line.split_once(':') {
             if k.eq_ignore_ascii_case("content-length") {
                 content_length = val.trim().parse().unwrap_or(0);
+            } else if k.eq_ignore_ascii_case("origin") {
+                origin = Some(val.trim().to_string());
             }
         }
     }
@@ -188,6 +201,7 @@ fn read_request<R: Read>(r: &mut R) -> Option<Req> {
         method,
         path,
         body: String::from_utf8_lossy(&body).into_owned(),
+        origin,
     })
 }
 
@@ -219,24 +233,26 @@ fn write_response<W: Write>(w: &mut W, status: u16, content_type: &str, body: &[
     let _ = w.flush();
 }
 
-/// Unguessable per-run token derived (via SHA-256) from the wall clock, this
-/// process id, and the bound port. sha2 is already a dependency; no `rand` crate
-/// is pulled in just for this. Good enough for a localhost form that lives for at
-/// most a few minutes.
-fn nonce(port: u16) -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let mut h = Sha256::new();
-    h.update(nanos.to_le_bytes());
-    h.update(std::process::id().to_le_bytes());
-    h.update(port.to_le_bytes());
-    h.finalize()
-        .iter()
-        .take(16)
-        .map(|b| format!("{b:02x}"))
-        .collect()
+/// A 128-bit per-run token from the OS CSPRNG. The page embeds it and must echo it
+/// back on POST /submit; because a cross-origin page cannot read our page (same-origin
+/// policy), only code we served knows the value. Uses `getrandom` (already in the
+/// dependency tree via rustls) rather than deriving the token from guessable inputs
+/// like the clock, pid, or the (attacker-knowable) port.
+fn nonce() -> Result<String, String> {
+    let mut buf = [0u8; 16];
+    getrandom::fill(&mut buf).map_err(|e| format!("could not generate a secure token: {e}"))?;
+    Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Whether a POST /submit may proceed given its `Origin`. Our page sends
+/// `Origin: http://127.0.0.1:{port}`; a cross-origin attacker page sends its own.
+/// A missing Origin (non-browser clients) is allowed — the nonce stays the primary
+/// gate. Defense in depth against localhost login-CSRF.
+fn origin_allowed(origin: Option<&str>, port: u16) -> bool {
+    match origin {
+        None => true,
+        Some(o) => o == format!("http://127.0.0.1:{port}"),
+    }
 }
 
 /// Open `url` in the platform's default browser. Returns whether the launcher
@@ -368,12 +384,13 @@ mod tests {
 
     #[test]
     fn read_request_parses_post_with_body() {
-        let raw = "POST /submit HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 13\r\n\r\n{\"a\":\"bcdef\"}";
+        let raw = "POST /submit HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1:5000\r\nContent-Length: 13\r\n\r\n{\"a\":\"bcdef\"}";
         let mut cursor = raw.as_bytes();
         let req = read_request(&mut cursor).expect("should parse");
         assert_eq!(req.method, "POST");
         assert_eq!(req.path, "/submit");
         assert_eq!(req.body, "{\"a\":\"bcdef\"}");
+        assert_eq!(req.origin.as_deref(), Some("http://127.0.0.1:5000"));
     }
 
     #[test]
@@ -384,13 +401,25 @@ mod tests {
         assert_eq!(req.method, "GET");
         assert_eq!(req.path, "/");
         assert!(req.body.is_empty());
+        assert!(req.origin.is_none());
     }
 
     #[test]
-    fn nonce_is_32_hex_chars() {
-        let n = nonce(12345);
+    fn nonce_is_random_128_bit_hex() {
+        let n = nonce().expect("rng available");
         assert_eq!(n.len(), 32);
         assert!(n.chars().all(|c| c.is_ascii_hexdigit()));
+        // CSPRNG, not a deterministic derivation: two draws differ.
+        assert_ne!(n, nonce().expect("rng available"));
+    }
+
+    #[test]
+    fn origin_allowed_only_for_our_localhost_origin() {
+        assert!(origin_allowed(None, 5000)); // non-browser client; nonce is the gate
+        assert!(origin_allowed(Some("http://127.0.0.1:5000"), 5000));
+        assert!(!origin_allowed(Some("http://127.0.0.1:5001"), 5000));
+        assert!(!origin_allowed(Some("https://evil.example"), 5000));
+        assert!(!origin_allowed(Some("null"), 5000));
     }
 
     #[test]
