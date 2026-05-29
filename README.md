@@ -179,6 +179,21 @@ install (override with `--insecure`). If `gfit-cli` lives in a protected
 directory (e.g. `/usr/local/bin`), run the update with `sudo`. This is a local
 command — it talks to GitHub, not the GFIT API, so it needs no login.
 
+## Skills
+
+This repo also ships ready-to-install **Agent Skills** that wrap `gfit-cli` for everyday
+coaching workflows (see [`skills/`](skills/)). They use the
+[`npx skills`](https://github.com/vercel-labs/skills) flat layout, so you can install one
+straight into Claude:
+
+```bash
+npx skills add dickwu/gfit-cli --skill gfit-weekly-checkin
+```
+
+| Skill | What it does |
+|-------|--------------|
+| [`gfit-weekly-checkin`](skills/gfit-weekly-checkin/SKILL.md) | Reviews the coach's clients, finds who hasn't submitted their weekly check-in, and drafts tiered follow-up emails in Gmail (drafts only — never sends). |
+
 ## Configuration
 
 State is stored at **`~/.config/gfit.json`**:
