@@ -203,18 +203,18 @@ live in [`skills/README.md`](skills/).
 For **Claude Desktop**, install the bundled MCP extension — it exposes gfit-cli as tools
 Claude can call directly (Desktop can't run a CLI on its own).
 
-**One-line install (macOS / Linux):** downloads the binary, registers the extension in
-`claude_desktop_config.json` (backing it up first), saves a usage guide, and walks you
-through sign-in:
+**One-line install (macOS):** downloads the binary, fetches the latest extension and
+registers it in `claude_desktop_config.json` (backing it up first), saves a usage guide,
+and walks you through sign-in:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dickwu/gfit-cli/main/install.sh | bash
 ```
 
 Then fully quit and reopen Claude Desktop. The script checks for `curl` / `unzip` / `node`
-and prints the exact install command if any is missing (Homebrew, or apt/dnf/pacman/apk…);
-it needs Node to auto-register, and without it falls back to saving the `.mcpb` and printing
-the **Settings → Extensions** import step. Want to read it first?
+and prints the exact Homebrew command if any is missing (installing Homebrew itself first
+if needed); it needs Node to auto-register, and without it falls back to saving the `.mcpb`
+and printing the **Settings → Extensions** import step. Want to read it first?
 [`install.sh`](install.sh).
 
 **Manual:** build from [`mcpb/`](mcpb/) (`npm install --omit=dev` then

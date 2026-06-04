@@ -1,33 +1,35 @@
 #!/usr/bin/env bash
 #
-# gfit-cli — one-line installer for Claude Desktop.
+# gfit-cli — one-line installer for Claude Desktop (macOS).
 #
 #   curl -fsSL https://raw.githubusercontent.com/dickwu/gfit-cli/main/install.sh | bash
 #
 # What it does (Claude Desktop only — it never touches ~/.claude/skills / Claude Code):
-#   1. downloads the gfit-cli binary for your OS/arch (latest release)
-#   2. downloads + unpacks the Claude Desktop MCP extension (.mcpb)
-#   3. saves the "Project instructions" usage guide (and copies it to your clipboard on macOS)
+#   1. downloads the gfit-cli binary for your Mac (latest release)
+#   2. downloads + unpacks the Claude Desktop MCP extension (.mcpb, latest mcpb-v* release)
+#   3. saves the "Project instructions" usage guide (and copies it to your clipboard)
 #   4. registers the extension in claude_desktop_config.json — backing the file up first
 #   5. walks you through the GFit browser sign-in
 #   6. prints how to enable it (restart Desktop) + how to load the guide
 #
+# macOS only. On Linux/Windows, install manually — see the README.
+#
 # Every non-default tool it needs (curl, unzip, node) is checked first; if one is
-# missing the script prints the exact install command for your system (Homebrew —
-# installing brew itself if absent — or apt/dnf/yum/pacman/apk/zypper) and stops.
+# missing the script prints the exact Homebrew command (installing Homebrew itself
+# first if it's absent) and stops.
 #
 # Env overrides (mostly for testing):
 #   GFIT_PREFIX          binary install dir            (default: ~/.local/bin)
 #   GFIT_MCPB_DIR        extension unpack dir          (default: ~/.local/share/gfit-cli-mcpb)
-#   GFIT_DESKTOP_CONFIG  Claude Desktop config path    (default: OS-specific)
-#   GFIT_MCPB_TAG        .mcpb release tag             (default: pinned below)
+#   GFIT_DESKTOP_CONFIG  Claude Desktop config path    (default: ~/Library/Application Support/Claude/…)
+#   GFIT_MCPB_TAG        pin a specific mcpb-v* release (default: auto = latest)
 #   GFIT_RAW_BASE        raw base URL for the guide    (default: github raw, main)
 #   GFIT_SKIP_LOGIN=1    skip the sign-in step
 
 set -euo pipefail
 
 REPO="dickwu/gfit-cli"
-MCPB_TAG="${GFIT_MCPB_TAG:-mcpb-v0.2.0}"
+DEFAULT_MCPB_TAG="mcpb-v0.2.0"     # fallback if the GitHub API can't be reached
 RAW_BASE="${GFIT_RAW_BASE:-https://raw.githubusercontent.com/${REPO}/main}"
 PREFIX="${GFIT_PREFIX:-$HOME/.local/bin}"
 MCPB_DIR="${GFIT_MCPB_DIR:-$HOME/.local/share/gfit-cli-mcpb}"
@@ -41,56 +43,26 @@ warn() { printf '%s\n' "${Y}  ! ${N} $*"; }
 die()  { printf '%s\n' "${R}error:${N} $*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# ---------- platform ----------
-OS="$(uname -s)"; ARCH="$(uname -m)"
-case "$OS" in
-  Darwin) PLATFORM="apple-darwin"
-          DEFAULT_CFG="$HOME/Library/Application Support/Claude/claude_desktop_config.json" ;;
-  Linux)  PLATFORM="unknown-linux-gnu"
-          DEFAULT_CFG="$HOME/.config/Claude/claude_desktop_config.json" ;;
-  *) die "unsupported OS '$OS' — on Windows install manually (see the README)" ;;
+# ---------- platform (macOS only) ----------
+[ "$(uname -s)" = "Darwin" ] || die "this installer is macOS-only — on Linux/Windows install manually (see the README)"
+case "$(uname -m)" in
+  arm64|aarch64) TARGET="aarch64-apple-darwin" ;;
+  x86_64)        TARGET="x86_64-apple-darwin" ;;
+  *) die "unsupported CPU arch '$(uname -m)'" ;;
 esac
-case "$ARCH" in
-  arm64|aarch64) RARCH="aarch64" ;;
-  x86_64|amd64)  RARCH="x86_64" ;;
-  *) die "unsupported CPU arch '$ARCH'" ;;
-esac
-TARGET="${RARCH}-${PLATFORM}"
-CFG="${GFIT_DESKTOP_CONFIG:-$DEFAULT_CFG}"
+CFG="${GFIT_DESKTOP_CONFIG:-$HOME/Library/Application Support/Claude/claude_desktop_config.json}"
 
-# ---------- dependency checks: verify a tool, else print how to install it ----------
-# Map a tool to its package name for a given manager (node is "nodejs" on Linux).
-pkgname() {
-  case "$1:$2" in
-    node:brew) echo "node" ;;
-    node:*)    echo "nodejs" ;;
-    *)         echo "$1" ;;
-  esac
-}
-# Print the best install command for $1 on this machine.
+# ---------- dependency checks: verify a tool, else print how to install it (Homebrew) ----------
 install_hint() {
   local tool="$1"
-  if [ "$OS" = "Darwin" ]; then
-    if have brew; then
-      echo "brew install $(pkgname "$tool" brew)"
-    else
-      echo "install Homebrew, then the tool:"
-      echo "         /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-      echo "         brew install $(pkgname "$tool" brew)"
-    fi
-    return
-  fi
-  # Linux: detect the package manager
-  if   have apt-get; then echo "sudo apt-get update && sudo apt-get install -y $(pkgname "$tool" apt)"
-  elif have dnf;     then echo "sudo dnf install -y $(pkgname "$tool" dnf)"
-  elif have yum;     then echo "sudo yum install -y $(pkgname "$tool" yum)"
-  elif have pacman;  then echo "sudo pacman -S --noconfirm $(pkgname "$tool" pacman)"
-  elif have apk;     then echo "sudo apk add $(pkgname "$tool" apk)"
-  elif have zypper;  then echo "sudo zypper install -y $(pkgname "$tool" zypper)"
-  else echo "install '$tool' with your system's package manager"
+  if have brew; then
+    echo "brew install $tool"
+  else
+    echo "install Homebrew, then the tool:"
+    echo "         /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+    echo "         brew install $tool"
   fi
 }
-# Hard requirement: stop with an install hint if missing.
 require() {
   if ! have "$1"; then
     warn "required tool '$1' is not installed."
@@ -118,17 +90,27 @@ case ":$PATH:" in
   *) warn "to run 'gfit-cli' directly in a terminal, add:  export PATH=\"$PREFIX:\$PATH\"" ;;
 esac
 
-# ---------- 2. extension (.mcpb): download, then unpack+register if node exists ----------
+# ---------- 2. extension (.mcpb): resolve newest release, download, unpack+register if node exists ----------
+if [ -n "${GFIT_MCPB_TAG:-}" ]; then
+  MCPB_URL="https://github.com/${REPO}/releases/download/${GFIT_MCPB_TAG}/gfit-cli.mcpb"
+else
+  say "Finding the latest extension release…"
+  MCPB_URL="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" 2>/dev/null \
+    | grep '"browser_download_url"' | grep 'gfit-cli\.mcpb"' \
+    | sed -E 's/.*"(https[^"]+)".*/\1/' | head -1 || true)"
+  [ -n "$MCPB_URL" ] || MCPB_URL="https://github.com/${REPO}/releases/download/${DEFAULT_MCPB_TAG}/gfit-cli.mcpb"
+fi
+MCPB_TAG="$(printf '%s' "$MCPB_URL" | sed -E 's#.*/download/([^/]+)/.*#\1#')"
+
 say "Downloading the Claude Desktop extension (${MCPB_TAG})…"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-MCPB_URL="https://github.com/${REPO}/releases/download/${MCPB_TAG}/gfit-cli.mcpb"
 curl -fsSL -o "$TMP/gfit-cli.mcpb" "$MCPB_URL" || die "download failed: $MCPB_URL"
 mkdir -p "$MCPB_DIR"
 cp "$TMP/gfit-cli.mcpb" "$MCPB_DIR/gfit-cli.mcpb"   # always keep the file (needed for UI import)
 
-# Find a Node runtime (the registered MCP server runs on `node`). Debian names it `nodejs`.
+# Find a Node runtime (the registered MCP server runs on `node`).
 NODE=""
-for c in node nodejs /opt/homebrew/bin/node /usr/local/bin/node; do
+for c in node /opt/homebrew/bin/node /usr/local/bin/node; do
   if command -v "$c" >/dev/null 2>&1; then NODE="$(command -v "$c")"; break; fi
 done
 
@@ -186,7 +168,7 @@ say "Saving the Claude Desktop usage guide…"
 GUIDE="$MCPB_DIR/claude-desktop-project.md"
 if curl -fsSL -o "$GUIDE" "${RAW_BASE}/mcpb/claude-desktop-project.md"; then
   ok "guide saved → $GUIDE"
-  if [ "$OS" = "Darwin" ] && have pbcopy; then
+  if have pbcopy; then
     pbcopy < "$GUIDE" && ok "guide copied to your clipboard (paste into a Project)"
   fi
 else
@@ -220,7 +202,7 @@ fi
 printf '\n'
 say "${G}Done — gfit-cli is installed for Claude Desktop.${N}"
 printf '\n%s\n' "${B}Enable it${N}"
-printf '  1. %s\n' "Fully quit Claude Desktop (Cmd+Q on macOS) and reopen it."
+printf '  1. %s\n' "Fully quit Claude Desktop (Cmd+Q) and reopen it."
 if [ "$WIRED" = "1" ]; then
   printf '     %s\n' "→ it loads the gfit-cli tools automatically."
 else
@@ -230,11 +212,7 @@ fi
 if [ -n "$GUIDE" ]; then
   printf '  2. %s\n' "Load the usage guide (recommended):"
   printf '     %s\n' "Claude Desktop → Projects → new Project → Instructions → paste the guide"
-  if [ "$OS" = "Darwin" ]; then
-    printf '     %s\n' "${D}(it's already on your clipboard; or open ${GUIDE})${N}"
-  else
-    printf '     %s\n' "${D}(open ${GUIDE} and copy it in)${N}"
-  fi
+  printf '     %s\n' "${D}(it's already on your clipboard; or open ${GUIDE})${N}"
 fi
 printf '  3. %s\n' "Try it — ask Claude:  ${B}\"list my GFit clients\"${N}"
 if [ "$LOGGED_IN" = "1" ]; then
