@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "gfit-cli",
   "display_name": "GFIT CLI",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Use the GFIT wellness API from Claude — clients, check-ins, plans, metrics, invoices, and more — by wrapping the gfit-cli tool.",
-  "long_description": "Exposes the `gfit-cli` command-line client as MCP tools so Claude Desktop can drive the GFIT wellness API. Discover commands (`gfit_list_commands`), read their docs (`gfit_help`), check login (`gfit_auth_status`), and call any of the ~144 endpoints (`gfit_run`). Reads run directly; write/destructive commands return a `--dry-run` preview unless you pass `confirm: true`, and `*.notice` (sends client email) / `*.delete` are guarded. Requires the gfit-cli binary installed and logged in (`gfit-cli auth.login`).",
+  "long_description": "Exposes the `gfit-cli` command-line client as MCP tools so Claude Desktop can drive the GFIT wellness API. Discover commands (`gfit_list_commands`), read their docs (`gfit_help`), check login (`gfit_auth_status`), sign in (`gfit_login`), and call any of the ~144 endpoints (`gfit_run`). If you're not signed in, a real call opens the GFIT browser sign-in automatically (no password passes through Claude) and you just retry. Reads run directly; write/destructive commands return a `--dry-run` preview unless you pass `confirm: true`, and `*.notice` (sends client email) / `*.delete` are guarded. Requires the gfit-cli binary installed.",
   "author": {
     "name": "Peilin Wu",
     "url": "https://github.com/dickwu/gfit-cli"
@@ -43,8 +43,12 @@
       "description": "Show whether gfit-cli is logged in."
     },
     {
+      "name": "gfit_login",
+      "description": "Open the GFIT browser sign-in page when not logged in (no password passes through Claude)."
+    },
+    {
       "name": "gfit_run",
-      "description": "Run any gfit-cli command. Reads run directly; writes return a dry-run preview unless confirm:true."
+      "description": "Run any gfit-cli command. Reads run directly; writes return a dry-run preview unless confirm:true. Opens the sign-in page if not logged in."
     }
   ],
   "tools_generated": false,

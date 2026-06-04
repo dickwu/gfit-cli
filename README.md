@@ -203,8 +203,10 @@ live in [`skills/README.md`](skills/).
 For **Claude Desktop**, install the bundled MCP extension instead of the skill — it exposes
 gfit-cli as tools Claude can call directly (Desktop can't run a CLI on its own). Build it
 from [`mcpb/`](mcpb/) (`npm install --omit=dev` then `npx @anthropic-ai/mcpb pack .`) and
-drag the resulting `gfit-cli.mcpb` into **Settings → Extensions**. It still needs gfit-cli
-installed and `gfit-cli auth.login`. Details: [`mcpb/README.md`](mcpb/).
+drag the resulting `gfit-cli.mcpb` into **Settings → Extensions**. It needs gfit-cli
+installed; you don't have to log in first — if you're signed out, the extension **opens the
+browser sign-in for you** on first use (or call the `gfit_login` tool). Details:
+[`mcpb/README.md`](mcpb/).
 
 ## Configuration
 

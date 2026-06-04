@@ -11,14 +11,19 @@ An [MCP Bundle](https://github.com/anthropics/mcpb) that wraps the `gfit-cli` bi
 | `gfit_list_commands` | List every gfit-cli command, grouped (the full ~144-command surface). |
 | `gfit_help` | Show one command's API docs — endpoint, auth, every parameter. |
 | `gfit_auth_status` | Check whether gfit-cli is logged in. |
-| `gfit_run` | Run any command. Reads run directly; **writes/destructive commands return a `--dry-run` preview unless `confirm: true`** (`*.notice` sends client email, `*.delete` removes data). |
+| `gfit_login` | Open the GFIT browser sign-in page (no password passes through Claude). |
+| `gfit_run` | Run any command. Reads run directly; **writes/destructive commands return a `--dry-run` preview unless `confirm: true`** (`*.notice` sends client email, `*.delete` removes data). **If you're not logged in, it opens the sign-in page instead of failing** — sign in, then retry. |
 
 ## Prerequisites
 
 1. **`gfit-cli` installed** (the binary this server shells out to) — see the repo
    [README](../README.md#install).
-2. **Logged in once:** `gfit-cli auth.login` (browser sign-in). The MCP server reuses the
-   saved token at `~/.config/gfit.json`; it does not handle the interactive login itself.
+2. **Logged in.** The MCP server reuses the saved token at `~/.config/gfit.json`. You no
+   longer have to log in up front: the first time you run a command while logged out (or
+   any time you call `gfit_login`), the server starts the **browser sign-in** for you and
+   returns the page URL — sign in there and the token is saved automatically. Your password
+   never passes through Claude. (You can still pre-seed it with `gfit-cli auth.login` in a
+   terminal if you prefer.)
 
 After install, configure the **gfit-cli path** (default `gfit-cli` if on your PATH) and
 optionally the **API base URL** in the extension's settings.

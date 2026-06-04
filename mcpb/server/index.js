@@ -86,6 +86,83 @@ function flattenParams(params) {
   return args;
 }
 
+// A localhost browser-login URL as printed by `gfit-cli auth.login`.
+const LOGIN_URL_RE = /https?:\/\/127\.0\.0\.1:\d+\/\S*/;
+
+// True when gfit-cli has a saved token (auth.status prints "token: present").
+async function isLoggedIn() {
+  const r = await runGfit(["auth.status"]);
+  return /token:\s*present/i.test(r.stdout);
+}
+
+// Start the browser sign-in flow (`gfit-cli auth.login` with no credentials): it
+// opens the user's default browser to a localhost-only page and waits up to 5 min
+// for them to submit. We spawn it DETACHED so it outlives this tool call, grab the
+// printed sign-in URL, then return — the user signs in, the token is saved to
+// ~/.config/gfit.json, and every later tool call picks it up automatically. No
+// password ever passes through Claude.
+function openLoginPage({ waitMs = 12000 } = {}) {
+  return new Promise((resolve) => {
+    const bin = resolveBinary();
+    let out = "";
+    let settled = false;
+    let child;
+    try {
+      child = spawn(bin, ["auth.login"], {
+        env: childEnv(),
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (e) {
+      resolve({ ok: false, url: null, message: `failed to start login: ${e.message}` });
+      return;
+    }
+    const settle = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      // Keep draining stdout so the detached child never blocks on a full pipe,
+      // but let it keep running in the background until the user finishes signing in.
+      try {
+        child.stdout.removeAllListeners("data");
+        child.stdout.resume();
+        child.stderr.resume();
+        child.unref();
+      } catch {}
+      resolve(r);
+    };
+    const timer = setTimeout(
+      () => settle({ ok: true, url: (out.match(LOGIN_URL_RE) || [])[0] || null, message: out }),
+      waitMs
+    );
+    child.stdout.on("data", (d) => {
+      out += d.toString();
+      const m = out.match(LOGIN_URL_RE);
+      if (m) settle({ ok: true, url: m[0], message: out });
+    });
+    child.stderr.on("data", (d) => (out += d.toString()));
+    child.on("error", (e) =>
+      settle({
+        ok: false,
+        url: null,
+        message: `failed to start login: ${e.message}. Is gfit-cli installed? Set its path in the extension's configuration.`,
+      })
+    );
+    child.on("close", (code) =>
+      settle({ ok: code === 0, url: (out.match(LOGIN_URL_RE) || [])[0] || null, message: out })
+    );
+  });
+}
+
+// Build a friendly "go sign in" message from an openLoginPage() result.
+function loginPrompt(res, prefix) {
+  const lines = [prefix, "I've opened the GFIT sign-in page in your default browser."];
+  if (res.url) lines.push(`If it didn't open, visit: ${res.url}`);
+  lines.push("Sign in there — the token saves automatically — then run your command again.");
+  if (!res.ok && res.message) lines.push(`\n(launcher note: ${res.message.trim()})`);
+  return lines.join("\n");
+}
+
 // Verbs that mutate production data; these get a dry-run preview unless confirmed.
 const WRITE_RE =
   /(create|update|delete|generate|publish|duplicate|attach|detach|notice|merge|upload|change|set-primary|reindex|answer-update|log-update|log-delete)/i;
@@ -119,7 +196,13 @@ const TOOLS = [
   {
     name: "gfit_auth_status",
     description:
-      "Show whether gfit-cli is logged in (account email, token presence, config path, API URL). If not logged in, the user must run `gfit-cli auth.login` once in a terminal.",
+      "Show whether gfit-cli is logged in (account email, token presence, config path, API URL). If not logged in, call gfit_login to open the browser sign-in page.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "gfit_login",
+    description:
+      "Open the GFIT browser sign-in page so the user can log in. Use this whenever a command reports the user isn't logged in. It launches the local browser sign-in flow (no password ever passes through Claude); once the user signs in, the saved token is used automatically by every other tool. Returns the sign-in URL in case the browser didn't open on its own.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -153,7 +236,7 @@ const TOOLS = [
 ];
 
 const server = new Server(
-  { name: "gfit-cli", version: "0.1.0" },
+  { name: "gfit-cli", version: "0.2.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -174,21 +257,38 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
     if (name === "gfit_auth_status") {
       const r = await runGfit(["auth.status"]);
-      return textResult(r.stdout || r.stderr || "(no output)", r.code !== 0);
+      let text = r.stdout || r.stderr || "(no output)";
+      if (!/token:\s*present/i.test(text)) {
+        text += "\n\nNot logged in — call gfit_login to open the GFIT sign-in page in your browser.";
+      }
+      return textResult(text, r.code !== 0);
+    }
+    if (name === "gfit_login") {
+      const res = await openLoginPage();
+      return textResult(loginPrompt(res, "Opening the GFIT sign-in page…"), false);
     }
     if (name === "gfit_run") {
       const command = String(a.command || "").trim();
       if (!command) return textResult("command is required", true);
       if (command === "auth.login") {
-        return textResult(
-          "auth.login uses an interactive browser sign-in and isn't available as a tool. Run `gfit-cli auth.login` once in a terminal; the saved token is then used here automatically.",
-          true
-        );
+        const res = await openLoginPage();
+        return textResult(loginPrompt(res, "auth.login uses an interactive browser sign-in."), false);
       }
       const raw = a.raw !== false; // default true
       const wantsWrite = isWriteCommand(command);
       const forcedPreview = wantsWrite && a.confirm !== true && a.dry_run !== true;
       const preview = a.dry_run === true || forcedPreview;
+
+      // Login check: a real (non-preview) call needs a saved token. If there isn't
+      // one, open the browser sign-in instead of failing with a cryptic error.
+      // Previews (--dry-run) stay offline-safe and skip the check.
+      if (!preview && !(await isLoggedIn())) {
+        const res = await openLoginPage();
+        return textResult(
+          loginPrompt(res, `"${command}" needs you signed in to GFIT, but no saved login was found.`),
+          false
+        );
+      }
 
       const args = [command, ...flattenParams(a.params)];
       if (raw) args.push("--raw");
