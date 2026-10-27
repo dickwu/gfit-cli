@@ -10,6 +10,7 @@
 //!
 //! Every command supports `-h` / `--help` to print its API documentation.
 
+mod app_report;
 mod args;
 mod client;
 mod config;
@@ -133,6 +134,30 @@ fn run(command: &Command, parsed: &args::ParsedArgs) -> Result<(), String> {
         return Err(
             "not logged in — run `gfit-cli auth.login --email <e> --password <p>` first".into(),
         );
+    }
+
+    // Specials: app reports page/decode/download beyond a single plain POST.
+    if matches!(
+        command.special,
+        Special::AppReportList | Special::AppReportShow
+    ) {
+        let base = config::api_url(&cfg);
+        if dry {
+            return if command.special == Special::AppReportList {
+                app_report::dry_run_list(&base, parsed)
+            } else {
+                app_report::dry_run_show(&base, parsed)
+            };
+        }
+        let ctx = app_report::Ctx {
+            base,
+            token: cfg.token.clone().unwrap_or_default(),
+        };
+        return if command.special == Special::AppReportList {
+            app_report::list(&ctx, parsed)
+        } else {
+            app_report::show(&ctx, parsed)
+        };
     }
 
     let body = build_body(command, parsed)?;
@@ -359,6 +384,14 @@ fn print_command_help(command: &Command) {
 
     if is_local {
         println!("\n  Flags:");
+        println!("    -h, --help       Show this help");
+    } else if matches!(
+        command.special,
+        Special::AppReportList | Special::AppReportShow
+    ) {
+        // --json/--raw are output modes here (see Parameters), not body merges.
+        println!("\n  Common flags:");
+        println!("    --dry-run        Print the request instead of sending it");
         println!("    -h, --help       Show this help");
     } else {
         println!("\n  Common flags:");

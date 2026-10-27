@@ -188,3 +188,62 @@ fn login_help_describes_browser_flow() {
     assert!(o.stdout.contains("--password"));
     assert!(o.stdout.contains("[optional]"));
 }
+
+#[test]
+fn app_report_list_dry_run_defaults_to_pending() {
+    let o = run(&["admin.app-report.list", "--dry-run", "--since", "24h"]);
+    assert_eq!(o.code, 0, "stderr: {}", o.stderr);
+    assert!(o.stdout.contains("admin/app-report/list"));
+    assert!(o.stdout.contains(r#""status":"pending""#));
+    assert!(o.stdout.contains("created_at >="));
+}
+
+#[test]
+fn app_report_list_all_sends_no_status() {
+    let o = run(&["app-report.list", "--dry-run", "--status", "all", "--json"]);
+    assert_eq!(o.code, 0, "stderr: {}", o.stderr);
+    assert!(o.stdout.contains(r#"body: {"page":1}"#));
+}
+
+#[test]
+fn app_report_list_rejects_bad_flags() {
+    let o = run(&["admin.app-report.list", "--dry-run", "--status", "open"]);
+    assert_eq!(o.code, 1);
+    assert!(o.stderr.contains("--status"));
+    let o = run(&["admin.app-report.list", "--dry-run", "--since", "soon"]);
+    assert_eq!(o.code, 1);
+    assert!(o.stderr.contains("--since"));
+}
+
+#[test]
+fn app_report_show_takes_positional_or_flag_id() {
+    let o = run(&["admin.app-report.show", "12", "--dry-run"]);
+    assert_eq!(o.code, 0, "stderr: {}", o.stderr);
+    assert!(o.stdout.contains(r#"{"id":12}"#));
+    let o = run(&["admin.app-report.show", "--json", "7", "--dry-run"]);
+    assert!(o.stdout.contains(r#"{"id":7}"#));
+    let o = run(&["admin.app-report.show", "--dry-run"]);
+    assert_eq!(o.code, 1);
+}
+
+#[test]
+fn app_report_set_status_is_a_plain_write() {
+    let o = run(&[
+        "admin.app-report.set-status",
+        "--id",
+        "3",
+        "--status",
+        "finished",
+        "--dry-run",
+    ]);
+    assert_eq!(o.code, 0, "stderr: {}", o.stderr);
+    assert!(o.stdout.contains("admin/app-report/status"));
+    assert!(o.stdout.contains(r#""status": "finished""#));
+}
+
+#[test]
+fn app_report_requires_login() {
+    let o = run(&["admin.app-report.list"]);
+    assert_eq!(o.code, 1);
+    assert!(o.stderr.contains("not logged in"));
+}

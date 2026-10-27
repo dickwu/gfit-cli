@@ -96,6 +96,8 @@ pub enum Special {
     Status,
     ClientFilter,
     Update,
+    AppReportList,
+    AppReportShow,
 }
 
 pub struct Command {
@@ -136,6 +138,10 @@ impl Command {
     }
     fn client_filter(mut self) -> Self {
         self.special = Special::ClientFilter;
+        self
+    }
+    fn special(mut self, s: Special) -> Self {
+        self.special = s;
         self
     }
 }
@@ -1842,6 +1848,76 @@ pub fn registry() -> Vec<Command> {
         "Get a dietitian receipt PDF download URL",
         vec![req("id", PType::Num, "Invoice id")],
     ));
+
+    // =========================================================== admin: app reports
+    // Problem reports filed from the workout app's Report button. list/show are
+    // Specials (paging + --since + decoded payloads, see src/app_report.rs).
+    c.push(
+        cmd(
+            "admin.app-report.list",
+            "admin/app-report/list",
+            true,
+            "List workout-app problem reports, newest first (human table, or --json/--raw for scripts)",
+            vec![
+                konst(
+                    "status",
+                    PType::Str,
+                    "pending",
+                    "pending | dealing | finished | all",
+                ),
+                opt(
+                    "since",
+                    PType::Str,
+                    "Only reports created since: a duration (30m, 24h, 7d, 2w) or an America/Winnipeg date/time (2026-10-26, '2026-10-26 09:00')",
+                ),
+                konst("limit", PType::Num, "50", "Max reports to return (pages through the API's 20-per-page list)"),
+                opt("json", PType::Bool, "Print JSON {generated_at, filter, status_counts, count, has_more, reports[]} (pretty)"),
+                opt("raw", PType::Bool, "Same JSON as --json, compact on one line"),
+            ],
+        )
+        .alias("app-report.list")
+        .special(Special::AppReportList),
+    );
+    c.push(
+        cmd(
+            "admin.app-report.show",
+            "admin/app-report/detail",
+            true,
+            "Show one problem report: comment, runtime info, session-log tail, presigned screenshot/attachment links",
+            vec![
+                req("id", PType::Num, "Report id (also accepted as a bare positional argument)"),
+                konst("tail", PType::Num, "40", "Session-log entries to print (0 = none; --json always includes all)"),
+                opt("download", PType::Str, "Directory to download the screenshot + attachments into"),
+                opt("json", PType::Bool, "Print the full report as JSON with info/logs decoded (pretty)"),
+                opt("raw", PType::Bool, "Same JSON as --json, compact on one line"),
+            ],
+        )
+        .alias("app-report.show")
+        .special(Special::AppReportShow),
+    );
+    c.push(
+        cmd(
+            "admin.app-report.pending-count",
+            "admin/app-report/pending-count",
+            true,
+            "Problem-report totals per status {all, pending, dealing, finished}",
+            vec![],
+        )
+        .alias("app-report.pending-count"),
+    );
+    c.push(
+        cmd(
+            "admin.app-report.set-status",
+            "admin/app-report/status",
+            true,
+            "Move a problem report to pending / dealing / finished (write: --dry-run first)",
+            vec![
+                req("id", PType::Num, "Report id"),
+                req("status", PType::Str, "pending | dealing | finished"),
+            ],
+        )
+        .alias("app-report.set-status"),
+    );
 
     c
 }

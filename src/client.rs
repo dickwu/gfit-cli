@@ -132,3 +132,21 @@ pub fn download_bytes(url: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("failed to read download: {e}"))?;
     Ok(bytes.to_vec())
 }
+
+/// GET a URL and return the raw bytes — used for the presigned (60-minute) R2
+/// links on app-report screenshots/attachments. No auth header is sent; the
+/// signature is in the URL.
+pub fn get_bytes(url: &str) -> Result<Vec<u8>, String> {
+    let client = build_client()?;
+    let resp = client
+        .get(url)
+        .send()
+        .map_err(|e| format!("download failed: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("download failed: HTTP {}", resp.status().as_u16()));
+    }
+    let bytes = resp
+        .bytes()
+        .map_err(|e| format!("failed to read download: {e}"))?;
+    Ok(bytes.to_vec())
+}

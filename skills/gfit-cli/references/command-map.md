@@ -36,6 +36,11 @@ The widest group. Highlights:
 - **Workouts:** `admin.workout.*` (list/generate/publish/notice/notice-id/videos/video-plan/
   update/duplicate/delete), `admin.video.*`, `admin.split.*` (incl. `report`,
   `details-*`, `attach`/`detach`).
+- **App problem reports:** `admin.app-report.list` (`--status pending|dealing|finished|all`,
+  `--since 24h|2026-10-26`, `--limit`, `--json`/`--raw` = JSON output, not a body merge),
+  `admin.app-report.show <id>` (comment, info, session-log tail `--tail N`, presigned
+  60-min screenshot/attachment links, `--download <dir>`), `admin.app-report.pending-count`,
+  `admin.app-report.set-status --id N --status …` (write — dry-run + confirm).
 - **Files & knowledge:** `admin.upload` (multipart: `--file <path> --type <type>`),
   `admin.nowledge.*` (status/documents/sources/search/answer/create/update/delete/…).
 

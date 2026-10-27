@@ -226,6 +226,28 @@ Either way you don't have to log in first — if you're signed out, the extensio
 browser sign-in for you** on first use (or call the `gfit_login` tool). Details:
 [`mcpb/README.md`](mcpb/).
 
+## App problem reports
+
+Reports filed from the workout app's **Report** button (admin token required).
+Timestamps are America/Winnipeg (the API's zone).
+
+```bash
+gfit-cli admin.app-report.list                       # pending, newest first (table)
+gfit-cli admin.app-report.list --status all --limit 100
+gfit-cli admin.app-report.list --since 24h --raw     # compact JSON for scheduled jobs
+gfit-cli admin.app-report.show 5 --tail 60 --download ~/Downloads/report-5
+gfit-cli admin.app-report.pending-count
+gfit-cli admin.app-report.set-status --id 5 --status dealing --dry-run
+```
+
+On `list`/`show`, `--json` (pretty) and `--raw` (compact) switch the **output** to JSON —
+they don't merge into the request body. `list --json` prints
+`{generated_at, timezone, filter, status_counts, count, has_more, reports[]}`; each report
+carries the full `comment`, `tag`, `app_version`, `status`, `user_id`/`user_name`,
+`has_screenshot`, `has_logs`, `attachment_count` and `created_at`. `--since` takes a
+duration (`30m`, `24h`, `7d`, `2w`) or a date/time (`2026-10-26`, `'2026-10-26 09:00'`).
+`show --json` decodes `info` and `logs` and includes every session-log entry.
+
 ## Configuration
 
 State is stored at **`~/.config/gfit.json`**:
@@ -265,6 +287,7 @@ src/
   login.rs      shared login helpers: exchange credentials for a token + persist it
   weblogin.rs   browser sign-in: localhost-only server that serves the login page
   update.rs     self-update: check GitHub Releases + replace the binary in place
+  app_report.rs admin.app-report.list/show: paging, --since, JSON output, downloads
 tests/
   cli.rs        end-to-end tests driving the built binary (dry-run, never networks)
 .github/workflows/
