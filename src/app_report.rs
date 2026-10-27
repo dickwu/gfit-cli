@@ -1,5 +1,5 @@
 //! Workout-app problem reports ("Report" button) for admins:
-//! `admin.app-report.list` and `admin.app-report.show`.
+//! `admin.app-report.list`, `admin.app-report.show` and `admin.app-report.reply`.
 //!
 //! These two are `Special` commands because they do more than one plain POST:
 //! `list` pages through `admin/app-report/list` (fixed 20 per page server-side,
@@ -20,6 +20,9 @@ use std::path::{Path, PathBuf};
 pub const STATUSES: &[&str] = &["pending", "dealing", "finished", "all"];
 const LIST_PATH: &str = "admin/app-report/list";
 const DETAIL_PATH: &str = "admin/app-report/detail";
+const REPLY_PATH: &str = "admin/app-report/reply";
+/// The API's cap on one reply (AppReportThread::MAX_CONTENT).
+pub const MAX_REPLY_CHARS: usize = 5000;
 const DEFAULT_LIMIT: usize = 50;
 const DEFAULT_TAIL: usize = 40;
 /// Safety stop for paging: 200 pages x 20 = 4000 reports.
@@ -589,6 +592,8 @@ pub fn show(ctx: &Ctx, parsed: &ParsedArgs) -> Result<(), String> {
         }
     }
 
+    print_thread(&data, &tz);
+
     println!("\nScreenshot:");
     if screenshot.is_empty() {
         println!("  (none)");
@@ -620,6 +625,101 @@ pub fn show(ctx: &Ctx, parsed: &ParsedArgs) -> Result<(), String> {
             println!("  {e}");
         }
     }
+    Ok(())
+}
+
+/// One conversation/timeline entry as a printable line block.
+pub fn thread_line(e: &Value) -> String {
+    let who = if bool_of(e, "from_admin") {
+        format!("{} (GFIT)", str_of(e, "user_name"))
+    } else {
+        format!("{} (reporter)", str_of(e, "user_name"))
+    };
+    let when = str_of(e, "created_at");
+    if str_of(e, "type") == "status_change" {
+        let from = str_of(e, "from_status_label");
+        let to = str_of(e, "to_status_label");
+        return format!("  {when}  {who}: status {from} → {to}");
+    }
+    let seen = if bool_of(e, "read") { "seen" } else { "unread" };
+    let mut out = format!("  {when}  {who} [{seen}]:");
+    for line in str_of(e, "content").lines() {
+        out.push_str("\n      ");
+        out.push_str(line);
+    }
+    out
+}
+
+fn print_thread(data: &Value, tz: &str) {
+    let thread = data
+        .get("thread")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let unread = int_of(data, "unread_count");
+    println!(
+        "\nThread ({tz}): {} entries{}",
+        thread.len(),
+        if unread > 0 {
+            format!(", {unread} unread from the reporter")
+        } else {
+            String::new()
+        }
+    );
+    if thread.is_empty() {
+        println!("  (no replies yet — gfit-cli admin.app-report.reply --id <ID> --message '...')");
+    }
+    for e in &thread {
+        println!("{}", thread_line(e));
+    }
+}
+
+/// `--message` validated the way the API does (trimmed, non-empty, capped).
+pub fn reply_body(parsed: &ParsedArgs) -> Result<Value, String> {
+    let id = show_id(parsed)?;
+    let message = parsed
+        .get("message")
+        .map(str::trim)
+        .unwrap_or("")
+        .to_string();
+    if message.is_empty() {
+        return Err("--message is required and must not be blank".into());
+    }
+    let n = message.chars().count();
+    if n > MAX_REPLY_CHARS {
+        return Err(format!(
+            "--message is {n} characters; the API accepts at most {MAX_REPLY_CHARS}"
+        ));
+    }
+    Ok(json!({ "id": id, "content": message }))
+}
+
+pub fn dry_run_reply(base: &str, parsed: &ParsedArgs) -> Result<(), String> {
+    let body = reply_body(parsed)?;
+    println!("POST {}/{REPLY_PATH}", base.trim_end_matches('/'));
+    println!("auth: Authorization: <token>");
+    println!(
+        "body: {}",
+        serde_json::to_string_pretty(&body).unwrap_or_default()
+    );
+    Ok(())
+}
+
+pub fn reply(ctx: &Ctx, parsed: &ParsedArgs) -> Result<(), String> {
+    let body = reply_body(parsed)?;
+    let id = body["id"].as_u64().unwrap_or(0);
+    let entry = ctx.call(REPLY_PATH, body)?;
+    if let Some(pretty) = json_mode(parsed) {
+        print_json(&entry, pretty);
+        return Ok(());
+    }
+    println!(
+        "Replied to report #{id} (thread entry {}) at {} {}",
+        int_of(&entry, "id"),
+        str_of(&entry, "created_at"),
+        zone_label()
+    );
+    println!("Thread: gfit-cli admin.app-report.show --id {id}");
     Ok(())
 }
 
@@ -683,6 +783,27 @@ mod tests {
         );
         assert_eq!(url_ext("https://x/noext?y=1.2"), None);
         assert_eq!(safe_name("../my clip.mov"), "_my_clip.mov");
+    }
+
+    #[test]
+    fn thread_lines() {
+        let status = json!({
+            "type": "status_change", "from_admin": true, "user_name": "Peilin",
+            "from_status_label": "Pending", "to_status_label": "In progress",
+            "created_at": "2026-10-27 12:00:00"
+        });
+        assert_eq!(
+            thread_line(&status),
+            "  2026-10-27 12:00:00  Peilin (GFIT): status Pending → In progress"
+        );
+        let msg = json!({
+            "type": "message", "from_admin": false, "user_name": "Dani",
+            "content": "hi\nthere", "read": false, "created_at": "2026-10-27 12:01:00"
+        });
+        assert_eq!(
+            thread_line(&msg),
+            "  2026-10-27 12:01:00  Dani (reporter) [unread]:\n      hi\n      there"
+        );
     }
 
     #[test]

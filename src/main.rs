@@ -139,24 +139,24 @@ fn run(command: &Command, parsed: &args::ParsedArgs) -> Result<(), String> {
     // Specials: app reports page/decode/download beyond a single plain POST.
     if matches!(
         command.special,
-        Special::AppReportList | Special::AppReportShow
+        Special::AppReportList | Special::AppReportShow | Special::AppReportReply
     ) {
         let base = config::api_url(&cfg);
         if dry {
-            return if command.special == Special::AppReportList {
-                app_report::dry_run_list(&base, parsed)
-            } else {
-                app_report::dry_run_show(&base, parsed)
+            return match command.special {
+                Special::AppReportList => app_report::dry_run_list(&base, parsed),
+                Special::AppReportShow => app_report::dry_run_show(&base, parsed),
+                _ => app_report::dry_run_reply(&base, parsed),
             };
         }
         let ctx = app_report::Ctx {
             base,
             token: cfg.token.clone().unwrap_or_default(),
         };
-        return if command.special == Special::AppReportList {
-            app_report::list(&ctx, parsed)
-        } else {
-            app_report::show(&ctx, parsed)
+        return match command.special {
+            Special::AppReportList => app_report::list(&ctx, parsed),
+            Special::AppReportShow => app_report::show(&ctx, parsed),
+            _ => app_report::reply(&ctx, parsed),
         };
     }
 

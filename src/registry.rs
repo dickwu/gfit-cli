@@ -98,6 +98,7 @@ pub enum Special {
     Update,
     AppReportList,
     AppReportShow,
+    AppReportReply,
 }
 
 pub struct Command {
@@ -1917,6 +1918,22 @@ pub fn registry() -> Vec<Command> {
             ],
         )
         .alias("app-report.set-status"),
+    );
+    c.push(
+        cmd(
+            "admin.app-report.reply",
+            "admin/app-report/reply",
+            true,
+            "Reply to a problem report's reporter; it shows in their app's My reports thread (write: --dry-run first)",
+            vec![
+                req("id", PType::Num, "Report id (also accepted as a bare positional argument)"),
+                req("message", PType::Str, "Reply text, max 5000 characters (sent as `content`)"),
+                opt("json", PType::Bool, "Print the created thread entry as JSON (pretty)"),
+                opt("raw", PType::Bool, "Same JSON as --json, compact on one line"),
+            ],
+        )
+        .alias("app-report.reply")
+        .special(Special::AppReportReply),
     );
 
     c
